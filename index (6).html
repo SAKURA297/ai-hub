@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AI Hub</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #080b10;
+    --surface: #0f1318;
+    --card: #151b24;
+    --border: #1e2a38;
+    --text: #e8edf5;
+    --muted: #5a6a7e;
+    --dev: #3dd68c;
+    --copy: #f9a03f;
+    --analyst: #5b9cf6;
+    --danger: #ff5f5f;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 70px;
+    overflow-x: hidden;
+  }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed; bottom:0; left:0; right:0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex; z-index: 50;
+  }
+  .nav-item {
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; padding:10px 0 8px;
+    cursor:pointer; gap:3px; transition: all .2s;
+  }
+  .nav-icon { font-size:20px; }
+  .nav-label { font-size:10px; font-weight:600; color:var(--muted); letter-spacing:.3px; }
+  .nav-item.active .nav-label { color:var(--text); }
+  .nav-item.active .nav-icon { transform:scale(1.1); }
+
+  /* ── PAGE ── */
+  .page { display:none; height:calc(100vh - 70px); flex-direction:column; }
+  .page.active { display:flex; }
+
+  /* ── CHAT HEADER ── */
+  .chat-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .agent-avatar {
+    width: 42px; height: 42px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+  .agent-dev  { background: rgba(61,214,140,.15); border: 1px solid rgba(61,214,140,.3); }
+  .agent-copy { background: rgba(249,160,63,.15);  border: 1px solid rgba(249,160,63,.3); }
+  .agent-anal { background: rgba(91,156,246,.15);  border: 1px solid rgba(91,156,246,.3); }
+
+  .agent-info { flex:1; }
+  .agent-name { font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:700; }
+  .agent-status { font-size:11px; color:var(--muted); margin-top:1px; }
+  .status-dot {
+    display: inline-block; width:6px; height:6px;
+    border-radius:50%; margin-right:5px; background:var(--muted);
+  }
+  .status-dot.online { background:var(--dev); animation: blink 2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .clear-btn {
+    width:34px; height:34px; border-radius:10px;
+    background:transparent; border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:14px; color:var(--muted);
+    transition: all .15s;
+  }
+  .clear-btn:active { background:var(--card); }
+
+  /* ── MESSAGES ── */
+  .messages {
+    flex:1; overflow-y:auto; padding:16px 16px 8px;
+    display:flex; flex-direction:column; gap:12px;
+    scroll-behavior:smooth;
+  }
+  .messages::-webkit-scrollbar { width:3px; }
+  .messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  .msg { display:flex; gap:8px; max-width:100%; }
+  .msg.user { flex-direction:row-reverse; }
+
+  .msg-avatar {
+    width:28px; height:28px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; flex-shrink:0; align-self:flex-end;
+  }
+  .msg-avatar.ai-dev  { background:rgba(61,214,140,.15); }
+  .msg-avatar.ai-copy { background:rgba(249,160,63,.15); }
+  .msg-avatar.ai-anal { background:rgba(91,156,246,.15); }
+  .msg-avatar.user-av { background:var(--card); }
+
+  .msg-bubble {
+    max-width: calc(100% - 80px);
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+  .msg.ai .msg-bubble {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+  .msg.user .msg-bubble {
+    background: var(--border);
+    border-bottom-right-radius: 4px;
+  }
+
+  /* code blocks */
+  .msg-bubble pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .msg-bubble code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .msg-bubble pre code { background:none; padding:0; }
+
+  .copy-code-btn {
+    display: block; margin-top: 6px;
+    background: var(--border); border:none;
+    color: var(--muted); padding: 5px 12px;
+    border-radius: 6px; font-size: 11px;
+    cursor:pointer; transition:all .15s;
+    font-family: 'Outfit', sans-serif;
+  }
+  .copy-code-btn:active { background:var(--dev); color:#000; }
+
+  /* typing indicator */
+  .typing { display:flex; gap:4px; align-items:center; padding:10px 14px; }
+  .typing span {
+    width:6px; height:6px; border-radius:50%; background:var(--muted);
+    animation: typing 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay:.2s; }
+  .typing span:nth-child(3) { animation-delay:.4s; }
+  @keyframes typing { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+  /* welcome message */
+  .welcome-msg {
+    text-align:center; padding:20px 16px;
+    color:var(--muted); font-size:13px; line-height:1.7;
+  }
+  .welcome-emoji { font-size:36px; margin-bottom:8px; }
+  .welcome-title { font-size:16px; font-weight:700; color:var(--text); margin-bottom:6px; }
+
+  /* quick prompts */
+  .quick-prompts {
+    display:flex; gap:8px; flex-wrap:wrap;
+    justify-content:center; margin-top:12px;
+  }
+  .quick-prompt {
+    padding:6px 12px; background:var(--card);
+    border:1px solid var(--border); border-radius:20px;
+    font-size:12px; color:var(--text); cursor:pointer;
+    transition:all .15s;
+  }
+  .quick-prompt:active { border-color:currentColor; }
+
+  /* ── INPUT ── */
+  .input-wrap {
+    padding:12px 16px;
+    background:var(--surface);
+    border-top:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .input-row {
+    display:flex; gap:8px; align-items:flex-end;
+    background:var(--card); border:1px solid var(--border);
+    border-radius:16px; padding:8px 8px 8px 14px;
+    transition:border-color .2s;
+  }
+  .input-row:focus-within { border-color:var(--muted); }
+
+  textarea {
+    flex:1; background:transparent; border:none; outline:none;
+    color:var(--text); font-family:'Outfit',sans-serif;
+    font-size:14px; line-height:1.5; resize:none;
+    max-height:120px; min-height:22px;
+  }
+  textarea::placeholder { color:var(--muted); }
+
+  .send-btn {
+    width:36px; height:36px; border-radius:10px;
+    border:none; cursor:pointer; display:flex;
+    align-items:center; justify-content:center;
+    font-size:16px; flex-shrink:0; transition:all .15s;
+  }
+  .send-btn:disabled { background:var(--border); cursor:default; }
+  .send-btn-dev  { background:var(--dev); color:#000; }
+  .send-btn-copy { background:var(--copy); color:#000; }
+  .send-btn-anal { background:var(--analyst); color:#000; }
+
+  /* ── HOME PAGE ── */
+  #page-home {
+    display:none; flex-direction:column;
+    overflow-y:auto;
+  }
+  #page-home.active { display:flex; }
+
+  .home-header {
+    padding: 24px 20px 16px;
+    text-align:center;
+  }
+  .home-logo {
+    width:60px; height:60px; border-radius:20px;
+    background:linear-gradient(135deg,#3dd68c,#5b9cf6);
+    display:flex; align-items:center; justify-content:center;
+    font-size:28px; margin:0 auto 12px;
+    box-shadow:0 8px 24px rgba(61,214,140,.2);
+  }
+  .home-title {
+    font-family:'JetBrains Mono',monospace;
+    font-size:24px; font-weight:700;
+    background:linear-gradient(135deg,#3dd68c,#5b9cf6);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    margin-bottom:6px;
+  }
+  .home-sub { font-size:13px; color:var(--muted); }
+
+  .agents-grid { display:flex; flex-direction:column; gap:12px; padding:0 16px 16px; }
+
+  .agent-card {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:18px; padding:16px; cursor:pointer;
+    transition:all .2s; display:flex; align-items:center; gap:14px;
+  }
+  .agent-card:active { transform:scale(.98); }
+  .agent-card-icon {
+    width:50px; height:50px; border-radius:14px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:24px; flex-shrink:0;
+  }
+  .agent-card-body { flex:1; }
+  .agent-card-name { font-weight:700; font-size:15px; margin-bottom:3px; }
+  .agent-card-desc { font-size:12px; color:var(--muted); line-height:1.5; }
+  .agent-card-arrow { color:var(--muted); font-size:18px; }
+
+  .stats-row {
+    display:flex; gap:10px; padding:0 16px 16px;
+  }
+  .stat-card {
+    flex:1; background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:12px; text-align:center;
+  }
+  .stat-num { font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:700; }
+  .stat-label { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  .section-title {
+    font-size:11px; font-weight:700; color:var(--muted);
+    text-transform:uppercase; letter-spacing:1px;
+    padding:0 16px 10px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ HOME ══ -->
+<div class="page" id="page-home">
+  <div class="home-header">
+    <div class="home-logo">🤖</div>
+    <div class="home-title">AI Hub</div>
+    <div class="home-sub">Твои персональные ИИ ассистенты</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-total">0</div>
+      <div class="stat-label">Запросов</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--dev)" id="stat-dev">0</div>
+      <div class="stat-label">Код</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--copy)" id="stat-copy">0</div>
+      <div class="stat-label">Тексты</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--analyst)" id="stat-anal">0</div>
+      <div class="stat-label">Анализ</div>
+    </div>
+  </div>
+
+  <div class="section-title">Выберите ассистента</div>
+
+  <div class="agents-grid">
+    <div class="agent-card" onclick="showPage('dev')">
+      <div class="agent-card-icon agent-dev">👨‍💻</div>
+      <div class="agent-card-body">
+        <div class="agent-card-name" style="color:var(--dev)">Разработчик</div>
+        <div class="agent-card-desc">Пишет код, исправляет баги, объясняет решения. Python, JS, HTML и другие языки.</div>
+      </div>
+      <div class="agent-card-arrow">›</div>
+    </div>
+
+    <div class="agent-card" onclick="showPage('copy')">
+      <div class="agent-card-icon agent-copy">✍️</div>
+      <div class="agent-card-body">
+        <div class="agent-card-name" style="color:var(--copy)">Копирайтер</div>
+        <div class="agent-card-desc">Пишет посты, описания, рекламу, переводит. Любой стиль и тон.</div>
+      </div>
+      <div class="agent-card-arrow">›</div>
+    </div>
+
+    <div class="agent-card" onclick="showPage('anal')">
+      <div class="agent-card-icon agent-anal">📊</div>
+      <div class="agent-card-body">
+        <div class="agent-card-name" style="color:var(--analyst)">Аналитик</div>
+        <div class="agent-card-desc">Анализирует данные, строит выводы, помогает с решениями и стратегией.</div>
+      </div>
+      <div class="agent-card-arrow">›</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ РАЗРАБОТЧИК ══ -->
+<div class="page" id="page-dev">
+  <div class="chat-header">
+    <div class="agent-avatar agent-dev">👨‍💻</div>
+    <div class="agent-info">
+      <div class="agent-name" style="color:var(--dev)">Разработчик</div>
+      <div class="agent-status"><span class="status-dot online"></span>Онлайн · готов к работе</div>
+    </div>
+    <div class="clear-btn" onclick="clearChat('dev')" title="Очистить чат">🗑</div>
+  </div>
+  <div class="messages" id="msgs-dev">
+    <div class="welcome-msg">
+      <div class="welcome-emoji">👨‍💻</div>
+      <div class="welcome-title">Привет! Я твой разработчик.</div>
+      Опиши задачу — напишу код, исправлю баг или объясню как что-то работает.
+      <div class="quick-prompts">
+        <div class="quick-prompt" style="border-color:var(--dev)" onclick="sendQuick('dev','Напиши функцию на Python для...')">🐍 Python</div>
+        <div class="quick-prompt" style="border-color:var(--dev)" onclick="sendQuick('dev','Напиши JavaScript код для...')">⚡ JavaScript</div>
+        <div class="quick-prompt" style="border-color:var(--dev)" onclick="sendQuick('dev','Исправь этот код и объясни ошибку:')">🐛 Исправить баг</div>
+        <div class="quick-prompt" style="border-color:var(--dev)" onclick="sendQuick('dev','Объясни как работает...')">📚 Объяснить</div>
+      </div>
+    </div>
+  </div>
+  <div class="input-wrap">
+    <div class="input-row">
+      <textarea id="input-dev" placeholder="Опиши задачу..." rows="1"
+        onkeydown="handleKey(event,'dev')" oninput="autoResize(this)"></textarea>
+      <button class="send-btn send-btn-dev" id="btn-dev" onclick="sendMsg('dev')" disabled>↑</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ КОПИРАЙТЕР ══ -->
+<div class="page" id="page-copy">
+  <div class="chat-header">
+    <div class="agent-avatar agent-copy">✍️</div>
+    <div class="agent-info">
+      <div class="agent-name" style="color:var(--copy)">Копирайтер</div>
+      <div class="agent-status"><span class="status-dot online" style="background:var(--copy)"></span>Онлайн · готов писать</div>
+    </div>
+    <div class="clear-btn" onclick="clearChat('copy')">🗑</div>
+  </div>
+  <div class="messages" id="msgs-copy">
+    <div class="welcome-msg">
+      <div class="welcome-emoji">✍️</div>
+      <div class="welcome-title">Привет! Я твой копирайтер.</div>
+      Скажи что написать — пост, описание, рекламу или перевод. Любой стиль.
+      <div class="quick-prompts">
+        <div class="quick-prompt" style="border-color:var(--copy)" onclick="sendQuick('copy','Напиши пост для Instagram о...')">📸 Instagram пост</div>
+        <div class="quick-prompt" style="border-color:var(--copy)" onclick="sendQuick('copy','Напиши описание товара/услуги:')">🛍 Описание</div>
+        <div class="quick-prompt" style="border-color:var(--copy)" onclick="sendQuick('copy','Переведи на английский:')">🌍 Перевод</div>
+        <div class="quick-prompt" style="border-color:var(--copy)" onclick="sendQuick('copy','Напиши рекламный текст для...')">📢 Реклама</div>
+      </div>
+    </div>
+  </div>
+  <div class="input-wrap">
+    <div class="input-row">
+      <textarea id="input-copy" placeholder="Что написать?..." rows="1"
+        onkeydown="handleKey(event,'copy')" oninput="autoResize(this)"></textarea>
+      <button class="send-btn send-btn-copy" id="btn-copy" onclick="sendMsg('copy')" disabled>↑</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ АНАЛИТИК ══ -->
+<div class="page" id="page-anal">
+  <div class="chat-header">
+    <div class="agent-avatar agent-anal">📊</div>
+    <div class="agent-info">
+      <div class="agent-name" style="color:var(--analyst)">Аналитик</div>
+      <div class="agent-status"><span class="status-dot online" style="background:var(--analyst)"></span>Онлайн · готов анализировать</div>
+    </div>
+    <div class="clear-btn" onclick="clearChat('anal')">🗑</div>
+  </div>
+  <div class="messages" id="msgs-anal">
+    <div class="welcome-msg">
+      <div class="welcome-emoji">📊</div>
+      <div class="welcome-title">Привет! Я твой аналитик.</div>
+      Дай данные или опиши ситуацию — сделаю анализ, выводы и рекомендации.
+      <div class="quick-prompts">
+        <div class="quick-prompt" style="border-color:var(--analyst)" onclick="sendQuick('anal','Проанализируй эти данные:')">📈 Анализ данных</div>
+        <div class="quick-prompt" style="border-color:var(--analyst)" onclick="sendQuick('anal','Сравни варианты и дай рекомендацию:')">⚖️ Сравнение</div>
+        <div class="quick-prompt" style="border-color:var(--analyst)" onclick="sendQuick('anal','Помоги составить бизнес-план для...')">💼 Бизнес-план</div>
+        <div class="quick-prompt" style="border-color:var(--analyst)" onclick="sendQuick('anal','Найди проблему в этой ситуации:')">🔍 Найти проблему</div>
+      </div>
+    </div>
+  </div>
+  <div class="input-wrap">
+    <div class="input-row">
+      <textarea id="input-anal" placeholder="Опиши задачу или вставь данные..." rows="1"
+        onkeydown="handleKey(event,'anal')" oninput="autoResize(this)"></textarea>
+      <button class="send-btn send-btn-anal" id="btn-anal" onclick="sendMsg('anal')" disabled>↑</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <div class="nav-item active" id="nav-home" onclick="showPage('home')">
+    <span class="nav-icon">🏠</span><span class="nav-label">Главная</span>
+  </div>
+  <div class="nav-item" id="nav-dev" onclick="showPage('dev')">
+    <span class="nav-icon">👨‍💻</span><span class="nav-label">Код</span>
+  </div>
+  <div class="nav-item" id="nav-copy" onclick="showPage('copy')">
+    <span class="nav-icon">✍️</span><span class="nav-label">Тексты</span>
+  </div>
+  <div class="nav-item" id="nav-anal" onclick="showPage('anal')">
+    <span class="nav-icon">📊</span><span class="nav-label">Анализ</span>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// НАСТРОЙКИ
+// ═══════════════════════════════════════
+const API_KEY = "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";
+
+const AGENTS = {
+  dev: {
+    name: "Разработчик",
+    emoji: "👨‍💻",
+    cls: "ai-dev",
+    system: `Ты опытный разработчик-программист. Пишешь чистый, рабочий код с комментариями. 
+Если задача связана с кодом — сразу пиши решение в code блоках. 
+Объясняй кратко и по делу. Отвечай на языке пользователя (русский или английский).
+Если код длинный — разбивай на части с объяснениями.`
+  },
+  copy: {
+    name: "Копирайтер",
+    emoji: "✍️",
+    cls: "ai-copy",
+    system: `Ты профессиональный копирайтер и контент-мейкер. 
+Пишешь engaging тексты для соцсетей, рекламы, описаний товаров и услуг.
+Адаптируешь стиль под запрос. Можешь переводить тексты.
+Отвечай на языке пользователя. Сразу давай готовый текст, без лишних объяснений.`
+  },
+  anal: {
+    name: "Аналитик",
+    emoji: "📊",
+    cls: "ai-anal",
+    system: `Ты бизнес-аналитик и стратег. Анализируешь данные, ситуации, проблемы.
+Даёшь чёткие выводы и actionable рекомендации. Используешь структурированный подход.
+Если нужно — используй списки, таблицы в тексте. Отвечай на языке пользователя.`
+  }
+};
+
+// история чатов
+const histories = { dev:[], copy:[], anal:[] };
+// статистика
+const stats = { dev:0, copy:0, anal:0 };
+
+// ═══════════════════════════════════════
+// НАВИГАЦИЯ
+// ═══════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
+  document.getElementById("page-"+name).classList.add("active");
+  document.getElementById("nav-"+name).classList.add("active");
+  if (name !== "home") {
+    setTimeout(() => scrollToBottom(name), 100);
+    document.getElementById("input-"+name)?.focus();
+  }
+  updateStats();
+}
+
+// ═══════════════════════════════════════
+// ОТПРАВКА
+// ═══════════════════════════════════════
+function handleKey(e, agent) {
+  const ta = document.getElementById("input-"+agent);
+  document.getElementById("btn-"+agent).disabled = !ta.value.trim();
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (ta.value.trim()) sendMsg(agent);
+  }
+}
+
+function autoResize(ta) {
+  ta.style.height = "auto";
+  ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
+  const agentKey = ta.id.replace("input-","");
+  document.getElementById("btn-"+agentKey).disabled = !ta.value.trim();
+}
+
+function sendQuick(agent, text) {
+  const ta = document.getElementById("input-"+agent);
+  ta.value = text;
+  autoResize(ta);
+  showPage(agent);
+  ta.focus();
+}
+
+async function sendMsg(agent) {
+  const ta  = document.getElementById("input-"+agent);
+  const btn = document.getElementById("btn-"+agent);
+  const text = ta.value.trim();
+  if (!text) return;
+
+  ta.value = ""; ta.style.height = "auto"; btn.disabled = true;
+
+  // добавить сообщение юзера
+  addMessage(agent, text, "user");
+  histories[agent].push({ role:"user", content:text });
+
+  // typing
+  const typingId = addTyping(agent);
+  scrollToBottom(agent);
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1500,
+        system: AGENTS[agent].system,
+        messages: histories[agent]
+      })
+    });
+
+    removeTyping(typingId, agent);
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || "Ошибка API");
+    }
+
+    const data = await response.json();
+    const reply = data.content[0].text;
+
+    histories[agent].push({ role:"assistant", content:reply });
+    addMessage(agent, reply, "ai");
+    stats[agent]++;
+    updateStats();
+
+  } catch(e) {
+    removeTyping(typingId, agent);
+    addMessage(agent, `❌ Ошибка: ${e.message}`, "ai");
+  }
+
+  scrollToBottom(agent);
+}
+
+// ═══════════════════════════════════════
+// СООБЩЕНИЯ
+// ═══════════════════════════════════════
+function addMessage(agent, text, role) {
+  const container = document.getElementById("msgs-"+agent);
+  const ag = AGENTS[agent];
+
+  const div = document.createElement("div");
+  div.className = `msg ${role === "user" ? "user" : "ai"}`;
+
+  const avatarDiv = document.createElement("div");
+  avatarDiv.className = `msg-avatar ${role === "user" ? "user-av" : ag.cls}`;
+  avatarDiv.textContent = role === "user" ? "👤" : ag.emoji;
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+  bubble.innerHTML = formatMessage(text, agent);
+
+  if (role === "user") {
+    div.appendChild(bubble);
+    div.appendChild(avatarDiv);
+  } else {
+    div.appendChild(avatarDiv);
+    div.appendChild(bubble);
+  }
+
+  container.appendChild(div);
+  scrollToBottom(agent);
+}
+
+function formatMessage(text, agent) {
+  // code blocks
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const escaped = code.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return `<pre><code>${escaped.trim()}</code></pre>
+            <button class="copy-code-btn" onclick="copyCode(this)">📋 Копировать код</button>`;
+  });
+  // inline code
+  text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // bold
+  text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+  // newlines
+  text = text.replace(/\n/g, "<br>");
+  return text;
+}
+
+function copyCode(btn) {
+  const pre = btn.previousElementSibling;
+  navigator.clipboard.writeText(pre.textContent).then(() => {
+    btn.textContent = "✅ Скопировано!";
+    setTimeout(() => btn.textContent = "📋 Копировать код", 2000);
+  });
+}
+
+function addTyping(agent) {
+  const id = "typing-" + Date.now();
+  const container = document.getElementById("msgs-"+agent);
+  const ag = AGENTS[agent];
+  const div = document.createElement("div");
+  div.className = "msg ai"; div.id = id;
+  div.innerHTML = `
+    <div class="msg-avatar ${ag.cls}">${ag.emoji}</div>
+    <div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  container.appendChild(div);
+  return id;
+}
+
+function removeTyping(id, agent) {
+  document.getElementById(id)?.remove();
+}
+
+function scrollToBottom(agent) {
+  const c = document.getElementById("msgs-"+agent);
+  if (c) c.scrollTop = c.scrollHeight;
+}
+
+function clearChat(agent) {
+  histories[agent] = [];
+  const c = document.getElementById("msgs-"+agent);
+  const welcome = c.querySelector(".welcome-msg");
+  // удалить все сообщения кроме welcome
+  Array.from(c.children).forEach(el => {
+    if (!el.classList.contains("welcome-msg")) el.remove();
+  });
+}
+
+// ═══════════════════════════════════════
+// СТАТИСТИКА
+// ═══════════════════════════════════════
+function updateStats() {
+  const total = stats.dev + stats.copy + stats.anal;
+  document.getElementById("stat-total").textContent = total;
+  document.getElementById("stat-dev").textContent   = stats.dev;
+  document.getElementById("stat-copy").textContent  = stats.copy;
+  document.getElementById("stat-anal").textContent  = stats.anal;
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+// активировать кнопки при вводе
+["dev","copy","anal"].forEach(a => {
+  const ta = document.getElementById("input-"+a);
+  if (ta) ta.addEventListener("input", () => {
+    document.getElementById("btn-"+a).disabled = !ta.value.trim();
+  });
+});
+
+showPage("home");
+</script>
+</body>
+</html>
